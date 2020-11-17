@@ -83,13 +83,13 @@ contracts <-
     third_claim_faute_4    = as.numeric(ThirdClaim_faute4)
   ) %>% 
   arrange(vin, contract_start_date) %>% 
-  group_by(vin) %>% 
-  mutate(contract_number = row_number()) %>% 
-  ungroup() %>% 
-  relocate(contract_number, .after = vin) %>%
   filter_at(vars(starts_with("expo_")), all_vars(near(., expo, tol = 0.05))) %>% 
-  select(-starts_with("expo_"))
-
+  select(-starts_with("expo_")) %>% 
+  filter(expo > 0.95 & expo < 1.05) %>% 
+  group_by(vin) %>% 
+  slice(1) %>% 
+  ungroup()
+  
 
 # Créer la base de données par réclamation ======================================================================================
 # Garder seulement les contrats (lignes) avec au moins une réclamation
@@ -106,7 +106,6 @@ claims_first <-
     driver_id, 
     contract_start_date, 
     contract_end_date,
-    contract_number, 
     contains("first")
   ) %>% 
   rename_all(~ str_replace_all(., "first_", ""))
@@ -121,7 +120,6 @@ claims_second <-
     driver_id, 
     contract_start_date, 
     contract_end_date,
-    contract_number,
     contains("second")
   ) %>% 
   filter(!is.na(second_claim_id)) %>% 
@@ -155,7 +153,6 @@ claims_final <-
   group_by(claim_id) %>% 
   summarise(
     vin = first(vin),
-    contract_number = first(contract_number),
     policy_id = first(policy_id),
     driver_id = first(driver_id),
     contract_start_date = first(contract_start_date),
@@ -180,29 +177,13 @@ claims_final <-
   ungroup()
 
 
-# Base de données qui indique le nombre de réclamations pour chaque contrat =====================================================
+# Base de données qui indique le nombre de réclamations pour chaque VIN =========================================================
 df_nb_claims <- 
   claims_final %>% 
-  group_by(vin, contract_number) %>% 
+  group_by(vin) %>% 
   summarise(nb_claims = n())
 
 rm(claims, claims_first, claims_second, coverages, contracts_with_claim)
-
-
-# Déterminer quels VIN seront dans l'ensemble d'entrainement et lesquels seront dans l'ensemble de validation ===================
-vins_valid <- 
-  contracts %>%
-  group_by(vin) %>% 
-  summarise(nb_contrats_un_an = sum((expo > 0.95) & (expo < 1.05))) %>% 
-  filter(nb_contrats_un_an >= 2) %>% 
-  pull(vin)
-  
-vins_train <- 
-  contracts %>%
-  group_by(vin) %>% 
-  summarise(nb_contrats_un_an = sum((expo > 0.95) & (expo < 1.05))) %>% 
-  filter(nb_contrats_un_an <= 1) %>% 
-  pull(vin) 
 
 
 # Fonction pour nettoyer une base de données par trajet =========================================================================
@@ -260,192 +241,92 @@ compute_tele_vars <- function(df) {
       trip_duration = duration,
       trip_max_speed = max_speed
     ) %>% 
-    group_by(vin, contract_number) %>% 
+    group_by(vin) %>% 
     summarise(
-      contract_start_date    = first(contract_start_date),
-      contract_end_date      = first(contract_end_date),
-      expo                   = first(expo),
-      annual_distance        = first(annual_distance),
-      commute_distance       = first(commute_distance),
-      conv_count_3_yrs_minor = first(conv_count_3_yrs_minor),
-      gender                 = first(gender),
-      marital_status         = first(marital_status),
-      pmt_plan               = first(pmt_plan),
-      veh_age                = first(veh_age),
-      veh_use                = first(veh_use),
-      years_claim_free       = first(years_claim_free),
-      years_licensed         = first(years_licensed),
-      avg_daily_distance     = sum(trip_distance),
-      avg_daily_nb_trips     = n(),
-      med_trip_avg_speed     = median(trip_avg_speed),
-      med_trip_distance      = median(trip_distance),
-      med_trip_max_speed     = median(trip_max_speed),
-      max_trip_max_speed     = max(trip_max_speed),
-      prop_long_trip         = sum(trip_distance > 100) / n(),
-      frac_expo_night        = sum(duration_night_trip) / sum(trip_duration),
-      frac_expo_noon         = sum(duration_noon_trip) / sum(trip_duration),
-      frac_expo_evening      = sum(duration_evening_trip) / sum(trip_duration),
-      frac_expo_peak_morning = sum(duration_peak_morning_trip) / sum(trip_duration),
-      frac_expo_peak_evening = sum(duration_peak_evening_trip) / sum(trip_duration),
-      frac_expo_mon_to_thu   = sum(duration_mon_to_thu) / sum(trip_duration),
-      frac_expo_fri_sat      = sum(duration_fri_sat) / sum(trip_duration)
+      contract_start_date      = first(contract_start_date),
+      contract_end_date        = first(contract_end_date),
+      c_expo                   = first(expo),
+      c_annual_distance        = first(annual_distance),
+      c_commute_distance       = first(commute_distance),
+      c_conv_count_3_yrs_minor = first(conv_count_3_yrs_minor),
+      c_gender                 = first(gender),
+      c_marital_status         = first(marital_status),
+      c_pmt_plan               = first(pmt_plan),
+      c_veh_age                = first(veh_age),
+      c_veh_use                = first(veh_use),
+      c_years_claim_free       = first(years_claim_free),
+      c_years_licensed         = first(years_licensed),
+      t_avg_daily_distance     = sum(trip_distance),
+      t_avg_daily_nb_trips     = n(),
+      t_med_trip_avg_speed     = median(trip_avg_speed),
+      t_med_trip_distance      = median(trip_distance),
+      t_med_trip_max_speed     = median(trip_max_speed),
+      t_max_trip_max_speed     = max(trip_max_speed),
+      t_prop_long_trip         = sum(trip_distance > 100) / n(),
+      t_frac_expo_night        = sum(duration_night_trip) / sum(trip_duration),
+      t_frac_expo_noon         = sum(duration_noon_trip) / sum(trip_duration),
+      t_frac_expo_evening      = sum(duration_evening_trip) / sum(trip_duration),
+      t_frac_expo_peak_morning = sum(duration_peak_morning_trip) / sum(trip_duration),
+      t_frac_expo_peak_evening = sum(duration_peak_evening_trip) / sum(trip_duration),
+      t_frac_expo_mon_to_thu   = sum(duration_mon_to_thu) / sum(trip_duration),
+      t_frac_expo_fri_sat      = sum(duration_fri_sat) / sum(trip_duration)
     ) %>% 
     ungroup() %>% 
     mutate(
-      avg_daily_distance = avg_daily_distance / (365.25 * expo),
-      avg_daily_nb_trips = avg_daily_nb_trips / (365.25 * expo)
+      t_avg_daily_distance = t_avg_daily_distance / (365.25 * c_expo),
+      t_avg_daily_nb_trips = t_avg_daily_nb_trips / (365.25 * c_expo)
     ) %>% 
     as_tibble()
 }
 
 
-# Fonction pour créer les jeux de données d'entrainement ========================================================================
-create_train_data <- function(trips_df_filename, nb_months_tele) {
+# Fonction pour créer un jeu de données à partir d'un fichier TRIP_VIN*.csv =====================================================
+create_data <- function(trips_df_filename, nb_months_tele) {
   trips_df <- read_csv(trips_df_filename)
-  i <<- i + 1; print(i)
   
-  trips_df %>% 
+  res <- 
+    trips_df %>% 
     clean_trips() %>% 
-    filter(vin %in% vins_train) %>% 
     merge_trips_contracts() %>% 
     filter(as.numeric(date_start) <= as.numeric(contract_start_date) + 30.4375 * nb_months_tele) %>% 
     group_by(trip_number) %>% 
     slice(1) %>% 
     ungroup() %>% 
     compute_tele_vars() %>% 
-    left_join(df_nb_claims, by = c("vin", "contract_number")) %>% 
-    mutate(nb_claims = replace_na(nb_claims, 0))
-}
-
-
-# Créer les 13 bases de données d'entrainement ==================================================================================
-trips_filenames <- dir_ls("0_data")[-1]
-
-train_01 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 1)
-train_02 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 2)
-train_03 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 3)
-train_04 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 4)
-train_05 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 5)
-train_06 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 6)
-train_07 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 7)
-train_08 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 8)
-train_09 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 9)
-train_10 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 10)
-train_11 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 11)
-train_12 <- map_dfr(trips_filenames, create_train_data, nb_months_tele = 12)
-
-write_rds(train_01, path = here("2_pipeline", "01_create_data", "train_01.RDS"))
-write_rds(train_02, path = here("2_pipeline", "01_create_data", "train_02.RDS"))
-write_rds(train_03, path = here("2_pipeline", "01_create_data", "train_03.RDS"))
-write_rds(train_04, path = here("2_pipeline", "01_create_data", "train_04.RDS"))
-write_rds(train_05, path = here("2_pipeline", "01_create_data", "train_05.RDS"))
-write_rds(train_06, path = here("2_pipeline", "01_create_data", "train_06.RDS"))
-write_rds(train_07, path = here("2_pipeline", "01_create_data", "train_07.RDS"))
-write_rds(train_08, path = here("2_pipeline", "01_create_data", "train_08.RDS"))
-write_rds(train_09, path = here("2_pipeline", "01_create_data", "train_09.RDS"))
-write_rds(train_10, path = here("2_pipeline", "01_create_data", "train_10.RDS"))
-write_rds(train_11, path = here("2_pipeline", "01_create_data", "train_11.RDS"))
-write_rds(train_12, path = here("2_pipeline", "01_create_data", "train_12.RDS"))
-
-
-# Fonction pour créer les jeux de données de validation =========================================================================
-create_valid_data <- function(trips_df_filename, nb_months_tele, annee_tele, annee_nb_claims) {
-  trips_df <- read_csv(trips_df_filename)
-  i <<- i + 1; print(i)
+    left_join(df_nb_claims, by = "vin") %>% 
+    mutate(nb_claims = replace_na(nb_claims, 0)) %>% 
+    mutate(claim_ind = factor(as.numeric(nb_claims > 0), levels = c("0", "1")))
   
-  trips_df %>% 
-    clean_trips() %>% 
-    filter(vin %in% vins_valid) %>% 
-    merge_trips_contracts() %>% 
-    filter(contract_number == annee_tele) %>% 
-    filter(as.numeric(date_start) <= as.numeric(contract_start_date) + 30.4375 * nb_months_tele) %>% 
-    group_by(trip_number) %>% 
-    slice(1) %>% 
-    ungroup() %>% 
-    select(-c(expo:years_licensed)) %>%
-    left_join(contracts %>% filter(contract_number == annee_nb_claims) %>% select(vin, expo:years_licensed), by = "vin") %>% 
-    compute_tele_vars() %>%
-    left_join(df_nb_claims %>% filter(contract_number == annee_nb_claims) %>% select(-contract_number), by = "vin") %>%
-    mutate(nb_claims = replace_na(nb_claims, 0))
+  i <<- i + 1; print(i)
+  return(res)
 }
 
 
-# Créer les jeux de données de validation =======================================================================================
-valid_1_01 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 1, annee_tele = 1, annee_nb_claims = 2)
-valid_1_02 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 2, annee_tele = 1, annee_nb_claims = 2)
-valid_1_03 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 3, annee_tele = 1, annee_nb_claims = 2)
-valid_1_04 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 4, annee_tele = 1, annee_nb_claims = 2)
-valid_1_05 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 5, annee_tele = 1, annee_nb_claims = 2)
-valid_1_06 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 6, annee_tele = 1, annee_nb_claims = 2)
-valid_1_07 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 7, annee_tele = 1, annee_nb_claims = 2)
-valid_1_08 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 8, annee_tele = 1, annee_nb_claims = 2)
-valid_1_09 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 9, annee_tele = 1, annee_nb_claims = 2)
-valid_1_10 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 10, annee_tele = 1, annee_nb_claims = 2)
-valid_1_11 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 11, annee_tele = 1, annee_nb_claims = 2)
-valid_1_12 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 12, annee_tele = 1, annee_nb_claims = 2)
+# Créer les 13 jeux de données ==================================================================================================
+trip_files <- dir_ls(here("0_data"), regexp = "TRIP_VIN")
 
-valid_2a_01 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 1, annee_tele = 1, annee_nb_claims = 1)
-valid_2a_02 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 2, annee_tele = 1, annee_nb_claims = 1)
-valid_2a_03 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 3, annee_tele = 1, annee_nb_claims = 1)
-valid_2a_04 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 4, annee_tele = 1, annee_nb_claims = 1)
-valid_2a_05 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 5, annee_tele = 1, annee_nb_claims = 1)
-valid_2a_06 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 6, annee_tele = 1, annee_nb_claims = 1)
-valid_2a_07 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 7, annee_tele = 1, annee_nb_claims = 1)
-valid_2a_08 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 8, annee_tele = 1, annee_nb_claims = 1)
-valid_2a_09 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 9, annee_tele = 1, annee_nb_claims = 1)
-valid_2a_10 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 10, annee_tele = 1, annee_nb_claims = 1)
-valid_2a_11 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 11, annee_tele = 1, annee_nb_claims = 1)
-valid_2a_12 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 12, annee_tele = 1, annee_nb_claims = 1)
-
-valid_2b_01 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 1, annee_tele = 2, annee_nb_claims = 2)
-valid_2b_02 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 2, annee_tele = 2, annee_nb_claims = 2)
-valid_2b_03 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 3, annee_tele = 2, annee_nb_claims = 2)
-valid_2b_04 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 4, annee_tele = 2, annee_nb_claims = 2)
-valid_2b_05 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 5, annee_tele = 2, annee_nb_claims = 2)
-valid_2b_06 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 6, annee_tele = 2, annee_nb_claims = 2)
-valid_2b_07 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 7, annee_tele = 2, annee_nb_claims = 2)
-valid_2b_08 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 8, annee_tele = 2, annee_nb_claims = 2)
-valid_2b_09 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 9, annee_tele = 2, annee_nb_claims = 2)
-valid_2b_10 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 10, annee_tele = 2, annee_nb_claims = 2)
-valid_2b_11 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 11, annee_tele = 2, annee_nb_claims = 2)
-valid_2b_12 <- map_dfr(trips_filenames, create_valid_data, nb_months_tele = 12, annee_tele = 2, annee_nb_claims = 2)
-
-
-write_rds(valid_1_01, path = here("2_pipeline", "01_create_data", "valid_1_01.RDS"))
-write_rds(valid_1_02, path = here("2_pipeline", "01_create_data", "valid_1_02.RDS"))
-write_rds(valid_1_03, path = here("2_pipeline", "01_create_data", "valid_1_03.RDS"))
-write_rds(valid_1_04, path = here("2_pipeline", "01_create_data", "valid_1_04.RDS"))
-write_rds(valid_1_05, path = here("2_pipeline", "01_create_data", "valid_1_05.RDS"))
-write_rds(valid_1_06, path = here("2_pipeline", "01_create_data", "valid_1_06.RDS"))
-write_rds(valid_1_07, path = here("2_pipeline", "01_create_data", "valid_1_07.RDS"))
-write_rds(valid_1_08, path = here("2_pipeline", "01_create_data", "valid_1_08.RDS"))
-write_rds(valid_1_09, path = here("2_pipeline", "01_create_data", "valid_1_09.RDS"))
-write_rds(valid_1_10, path = here("2_pipeline", "01_create_data", "valid_1_10.RDS"))
-write_rds(valid_1_11, path = here("2_pipeline", "01_create_data", "valid_1_11.RDS"))
-write_rds(valid_1_12, path = here("2_pipeline", "01_create_data", "valid_1_12.RDS"))
-
-write_rds(valid_2a_01, path = here("2_pipeline", "01_create_data", "valid_2a_01.RDS"))
-write_rds(valid_2a_02, path = here("2_pipeline", "01_create_data", "valid_2a_02.RDS"))
-write_rds(valid_2a_03, path = here("2_pipeline", "01_create_data", "valid_2a_03.RDS"))
-write_rds(valid_2a_04, path = here("2_pipeline", "01_create_data", "valid_2a_04.RDS"))
-write_rds(valid_2a_05, path = here("2_pipeline", "01_create_data", "valid_2a_05.RDS"))
-write_rds(valid_2a_06, path = here("2_pipeline", "01_create_data", "valid_2a_06.RDS"))
-write_rds(valid_2a_07, path = here("2_pipeline", "01_create_data", "valid_2a_07.RDS"))
-write_rds(valid_2a_08, path = here("2_pipeline", "01_create_data", "valid_2a_08.RDS"))
-write_rds(valid_2a_09, path = here("2_pipeline", "01_create_data", "valid_2a_09.RDS"))
-write_rds(valid_2a_10, path = here("2_pipeline", "01_create_data", "valid_2a_10.RDS"))
-write_rds(valid_2a_11, path = here("2_pipeline", "01_create_data", "valid_2a_11.RDS"))
-write_rds(valid_2a_12, path = here("2_pipeline", "01_create_data", "valid_2a_12.RDS"))
-
-write_rds(valid_2b_01, path = here("2_pipeline", "01_create_data", "valid_2b_01.RDS"))
-write_rds(valid_2b_02, path = here("2_pipeline", "01_create_data", "valid_2b_02.RDS"))
-write_rds(valid_2b_03, path = here("2_pipeline", "01_create_data", "valid_2b_03.RDS"))
-write_rds(valid_2b_04, path = here("2_pipeline", "01_create_data", "valid_2b_04.RDS"))
-write_rds(valid_2b_05, path = here("2_pipeline", "01_create_data", "valid_2b_05.RDS"))
-write_rds(valid_2b_06, path = here("2_pipeline", "01_create_data", "valid_2b_06.RDS"))
-write_rds(valid_2b_07, path = here("2_pipeline", "01_create_data", "valid_2b_07.RDS"))
-write_rds(valid_2b_08, path = here("2_pipeline", "01_create_data", "valid_2b_08.RDS"))
-write_rds(valid_2b_09, path = here("2_pipeline", "01_create_data", "valid_2b_09.RDS"))
-write_rds(valid_2b_10, path = here("2_pipeline", "01_create_data", "valid_2b_10.RDS"))
-write_rds(valid_2b_11, path = here("2_pipeline", "01_create_data", "valid_2b_11.RDS"))
-write_rds(valid_2b_12, path = here("2_pipeline", "01_create_data", "valid_2b_12.RDS"))
+i <- 0
+jeu_01 <- map_dfr(trip_files, create_data, nb_months_tele = 1)
+write_rds(jeu_01, path = here("2_pipeline", "01_create_data", "jeu_01.RDS")); i <- 0
+jeu_02 <- map_dfr(trip_files, create_data, nb_months_tele = 2)
+write_rds(jeu_02, path = here("2_pipeline", "01_create_data", "jeu_02.RDS")); i <- 0
+jeu_03 <- map_dfr(trip_files, create_data, nb_months_tele = 3)
+write_rds(jeu_03, path = here("2_pipeline", "01_create_data", "jeu_03.RDS")); i <- 0
+jeu_04 <- map_dfr(trip_files, create_data, nb_months_tele = 4)
+write_rds(jeu_04, path = here("2_pipeline", "01_create_data", "jeu_04.RDS")); i <- 0
+jeu_05 <- map_dfr(trip_files, create_data, nb_months_tele = 5)
+write_rds(jeu_05, path = here("2_pipeline", "01_create_data", "jeu_05.RDS")); i <- 0
+jeu_06 <- map_dfr(trip_files, create_data, nb_months_tele = 6)
+write_rds(jeu_06, path = here("2_pipeline", "01_create_data", "jeu_06.RDS")); i <- 0
+jeu_07 <- map_dfr(trip_files, create_data, nb_months_tele = 7)
+write_rds(jeu_07, path = here("2_pipeline", "01_create_data", "jeu_07.RDS")); i <- 0
+jeu_08 <- map_dfr(trip_files, create_data, nb_months_tele = 8)
+write_rds(jeu_08, path = here("2_pipeline", "01_create_data", "jeu_08.RDS")); i <- 0
+jeu_09 <- map_dfr(trip_files, create_data, nb_months_tele = 9)
+write_rds(jeu_09, path = here("2_pipeline", "01_create_data", "jeu_09.RDS")); i <- 0
+jeu_10 <- map_dfr(trip_files, create_data, nb_months_tele = 10)
+write_rds(jeu_10, path = here("2_pipeline", "01_create_data", "jeu_10.RDS")); i <- 0
+jeu_11 <- map_dfr(trip_files, create_data, nb_months_tele = 11)
+write_rds(jeu_11, path = here("2_pipeline", "01_create_data", "jeu_11.RDS")); i <- 0
+jeu_12 <- map_dfr(trip_files, create_data, nb_months_tele = 12)
+write_rds(jeu_12, path = here("2_pipeline", "01_create_data", "jeu_12.RDS")); i <- 0
