@@ -1,34 +1,31 @@
 # ============================================================================================================================= #
-# But: Créer les 12 bases de données d'entrainement ainsi que les 36 bases de données de validation                             #
+# But: Créer les 12 jeux de données, les 12 baes d'entrainement et les 12 bases de validation                                   #
 # Auteur: Francis Duval                                                                                                         #
-# Date: Octobre 2020                                                                                                            #
+# Date: Novembre 2020                                                                                                           #
 # Input: ContractAuto.csv, TRIP_VIN1.csv:TRIP_VIN268.csv                                                                        #
-# Output: train_01:train_12, valid_1_01:valid_1_12, valid_2a_01:valid_2a_12, valid_2b_01:valid_2b_12                            #
+# Output: jeu_ls.RDS, train_ls.RDS, test_ls.RDS                                                                                 #
 # ============================================================================================================================= #
 
 source("1_code/00_source.R")
+options(readr.show_progress = F)
 
 
 # Importer le jeu de données ContractAuto =======================================================================================
-contracts_import <- read_csv(here("0_data", "ContractAuto.csv"))
+contracts_import <- read_csv(here("0_data", "Contrat_Nov2020.csv"), col_types = cols(.default = "c"))
 
 
 # Nettoyer la base de données par contrat =======================================================================================
 contracts <- 
   contracts_import %>% 
   transmute(
-    vin                    = ENROLLED_VIN,
-    policy_id              = as.character(POLICY_ID_M),
-    driver_id              = as.character(Princ_CGID1),
-    contract_start_date    = as.Date(parse_date_time2(poleffdate_m, "%d%b%Y!")),
-    contract_end_date      = as.Date(parse_date_time2(polexpdate_m, "%d%b%Y!")),
-    expo                   = exposit1,
-    expo_10                = exposit10,
-    expo_11                = exposit11,
-    expo_12                = exposit12,
-    expo_26                = exposit26,
-    expo_37                = exposit37,
-    expo_45                = exposit45,
+    vin                    = VIN,
+    policy_id              = POLICY_ID_M,
+    contract_start_date    = as.Date(parse_date_time2(POLEFFDATE_M, "%d%b%Y!")),
+    contract_end_date      = as.Date(parse_date_time2(POLEXPDATE_M, "%d%b%Y!")),
+    expo_2                 = as.numeric(expo_Col),
+    expo_3                 = as.numeric(expo_Comp),
+    expo_4                 = as.numeric(expo_DCPD),
+    expo_5                 = as.numeric(expo_Liab),
     annual_distance        = as.integer(ANNUALMILEAGE),
     commute_distance       = as.integer(COMMUTEDISTANCE),
     conv_count_3_yrs_minor = as.integer(CONVCOUNTMINOR3YRS),
@@ -37,14 +34,16 @@ contracts <-
     pmt_plan               = factor(PAYMENTPLAN),
     veh_age                = as.integer(VEHICLEAGE),
     veh_use                = factor(VEHICLEUSE),
-    years_claim_free       = DRIVER_YEARSCLAIMFREE,
+    years_claim_free       = as.integer(DRIVER_YEARSCLAIMFREE),
     years_licensed         = as.integer(DRIVER_YEARSLICENSED),
-    first_claim_date       = as.Date(parse_date_time2(as.character(FirstClaim_date), "%d%b%y!:%H:%M:%OS")),
-    second_claim_date      = as.Date(parse_date_time2(as.character(SecClaim_date), "%d%b%y!:%H:%M:%OS")),
-    third_claim_date       = as.Date(parse_date_time2(as.character(ThirdClaim_date), "%d%b%y!:%H:%M:%OS")),
-    first_claim_id         = as.character(claimid1),
-    second_claim_id        = as.character(claimid2),
-    third_claim_id         = as.character(claimid3),
+    first_claim_date       = as.Date(parse_date_time2(dateofloss1, "%d%b%Y:%H:%M:%OS")),
+    second_claim_date      = as.Date(parse_date_time2(dateofloss2, "%d%b%Y:%H:%M:%OS")),
+    third_claim_date       = as.Date(parse_date_time2(dateofloss3, "%d%b%Y:%H:%M:%OS")),
+    fourth_claim_date      = as.Date(parse_date_time2(dateofloss4, "%d%b%Y:%H:%M:%OS")),
+    first_claim_id         = claimid1,
+    second_claim_id        = claimid2,
+    third_claim_id         = claimid3,
+    fourth_claim_id        = claimid4,
     first_claim_cov_1      = as.numeric(FirstClaim_cov1),
     first_claim_cov_2      = as.numeric(FirstClaim_cov2),
     first_claim_cov_3      = as.numeric(FirstClaim_cov3),
@@ -57,33 +56,30 @@ contracts <-
     third_claim_cov_2      = as.numeric(ThirdClaim_cov2),
     third_claim_cov_3      = as.numeric(ThirdClaim_cov3),
     third_claim_cov_4      = as.numeric(ThirdClaim_cov4),
-    first_claim_cost_1     = as.numeric(FirstClaim_cost1),
-    first_claim_cost_2     = as.numeric(FirstClaim_cost2),
-    first_claim_cost_3     = as.numeric(FirstClaim_cost3),
-    first_claim_cost_4     = as.numeric(FirstClaim_cost4),
-    second_claim_cost_1    = as.numeric(SecClaim_cost1),
-    second_claim_cost_2    = as.numeric(SecClaim_cost2),
-    second_claim_cost_3    = as.numeric(SecClaim_cost3),
-    second_claim_cost_4    = as.numeric(SecClaim_cost4),
-    third_claim_cost_1     = as.numeric(ThirdClaim_cost1),
-    third_claim_cost_2     = as.numeric(ThirdClaim_cost2),
-    third_claim_cost_3     = as.numeric(ThirdClaim_cost3),
-    third_claim_cost_4     = as.numeric(ThirdClaim_cost4),
-    first_claim_faute_1    = as.numeric(FirstClaim_faute1),
-    first_claim_faute_2    = as.numeric(FirstClaim_faute2),
-    first_claim_faute_3    = as.numeric(FirstClaim_faute3),
-    first_claim_faute_4    = as.numeric(FirstClaim_faute4),
-    second_claim_faute_1   = as.numeric(SecClaim_faute1),
-    second_claim_faute_2   = as.numeric(SecClaim_faute2),
-    second_claim_faute_3   = as.numeric(SecClaim_faute3),
-    second_claim_faute_4   = as.numeric(SecClaim_faute4),
-    third_claim_faute_1    = as.numeric(ThirdClaim_faute1),
-    third_claim_faute_2    = as.numeric(ThirdClaim_faute2),
-    third_claim_faute_3    = as.numeric(ThirdClaim_faute3),
-    third_claim_faute_4    = as.numeric(ThirdClaim_faute4)
+    fourth_claim_cov_1     = as.numeric(FourthClaim_cov1),
+    fourth_claim_cov_2     = as.numeric(FourthClaim_cov2),
+    fourth_claim_cov_3     = as.numeric(FourthClaim_cov3),
+    fourth_claim_cov_4     = as.numeric(FourthClaim_cov4),
+    first_claim_cost_1     = as.numeric(FirstClaim_loss1),
+    first_claim_cost_2     = as.numeric(FirstClaim_loss2),
+    first_claim_cost_3     = as.numeric(FirstClaim_loss3),
+    first_claim_cost_4     = as.numeric(FirstClaim_loss4),
+    second_claim_cost_1    = as.numeric(SecClaim_loss1),
+    second_claim_cost_2    = as.numeric(SecClaim_loss2),
+    second_claim_cost_3    = as.numeric(SecClaim_loss3),
+    second_claim_cost_4    = as.numeric(SecClaim_loss4),
+    third_claim_cost_1     = as.numeric(ThirdClaim_loss1),
+    third_claim_cost_2     = as.numeric(ThirdClaim_loss2),
+    third_claim_cost_3     = as.numeric(ThirdClaim_loss3),
+    third_claim_cost_4     = as.numeric(ThirdClaim_loss4),
+    fourth_claim_cost_1    = as.numeric(FourthClaim_loss1),
+    fourth_claim_cost_2    = as.numeric(FourthClaim_loss2),
+    fourth_claim_cost_3    = as.numeric(FourthClaim_loss3),
+    fourth_claim_cost_4    = as.numeric(FourthClaim_loss4)
   ) %>% 
   arrange(vin, contract_start_date) %>% 
-  filter_at(vars(starts_with("expo_")), all_vars(near(., expo, tol = 0.05))) %>% 
+  filter_at(vars(starts_with("expo_")), all_vars(near(., expo_2, tol = 0.05))) %>%
+  rename(expo = expo_2) %>% 
   select(-starts_with("expo_")) %>% 
   filter(expo > 0.95 & expo < 1.05) %>% 
   group_by(vin) %>% 
@@ -97,13 +93,13 @@ contracts_with_claim <-
   contracts %>% 
   filter(!is.na(first_claim_id))
 
+
 # Transformer la base de données par contrats de manière à avoir une ligne par réclamation
 claims_first <- 
   contracts_with_claim %>% 
   select(
     vin, 
-    policy_id, 
-    driver_id, 
+    policy_id,
     contract_start_date, 
     contract_end_date,
     contains("first")
@@ -116,8 +112,7 @@ claims_second <-
   contracts_with_claim %>% 
   select(
     vin, 
-    policy_id, 
-    driver_id, 
+    policy_id,
     contract_start_date, 
     contract_end_date,
     contains("second")
@@ -127,18 +122,57 @@ claims_second <-
 
 # ----------
 
-claims <- bind_rows(claims_first, claims_second)
+claims_third <- 
+  contracts_with_claim %>% 
+  select(
+    vin, 
+    policy_id,
+    contract_start_date, 
+    contract_end_date,
+    contains("third")
+  ) %>% 
+  filter(!is.na(third_claim_id)) %>% 
+  rename_all(~ str_replace_all(., "third_", ""))
+
+# ----------
+
+claims_fourth <- 
+  contracts_with_claim %>% 
+  select(
+    vin, 
+    policy_id,
+    contract_start_date, 
+    contract_end_date,
+    contains("fourth")
+  ) %>% 
+  filter(!is.na(fourth_claim_id)) %>% 
+  rename_all(~ str_replace_all(., "fourth_", ""))
+
+# ----------
+
+claims <- bind_rows(claims_first, claims_second, claims_third, claims_fourth)
+
 
 # Créer une base de données ayant une ligne par couverture
+cov_vec <- 
+  claims %>%
+  mutate_at(vars(claim_cov_1:claim_cov_4), as.character) %>% 
+  pivot_longer(claim_cov_1:claim_cov_4, values_to = "cov", names_to = "name_cov") %>% 
+  select(-starts_with("claim_cost"), -name_cov) %>% 
+  filter(!is.na(cov)) %>% 
+  pull(cov)
+
 coverages <- 
   claims %>%
-  mutate_at(vars(claim_cov_1:claim_faute_4), as.character) %>% 
-  pivot_longer(claim_cov_1:claim_faute_4) %>% 
-  separate(name, c("delete", "info_type", "delete_2"), sep = "_") %>% 
-  pivot_wider(names_from = info_type, values_from = value) %>% 
-  select(-delete, -delete_2) %>% 
-  filter(!is.na(cov)) %>% 
-  mutate_at(vars(cov, cost, faute), as.numeric)
+  mutate_at(vars(claim_cost_1:claim_cost_4), as.character) %>% 
+  pivot_longer(claim_cost_1:claim_cost_4, values_to = "cost", names_to = "name_cost") %>% 
+  select(-starts_with("claim_cov"), -name_cost) %>% 
+  filter(!is.na(cost)) %>% 
+  mutate(
+    cov = as.numeric(cov_vec),
+    cost = as.numeric(cost)
+  )
+
 
 # Créer des variables indicatrices et les coûts par couverture
 coverages %<>%
@@ -147,34 +181,38 @@ coverages %<>%
   mutate_at(vars(contains("cov")), list(cost = ~. * coverages$cost)) %>% 
   select(-cost)
 
+
 # Retour à une ligne par réclamation
-claims_final <- 
+claims_almost_final <- 
   coverages %>% 
   group_by(claim_id) %>% 
   summarise(
     vin = first(vin),
     policy_id = first(policy_id),
-    driver_id = first(driver_id),
     contract_start_date = first(contract_start_date),
     contract_end_date = first(contract_end_date),
     claim_date = first(claim_date),
-    faute = first(faute),
     cov_1_ind = max(cov_1),
-    cov_10_ind = max(cov_10),
-    cov_11_ind = max(cov_11),
-    cov_12_ind = max(cov_12),
-    cov_26_ind = max(cov_26),
-    cov_37_ind = max(cov_37),
-    cov_45_ind = max(cov_45),
+    cov_2_ind = max(cov_2),
+    cov_3_ind = max(cov_3),
+    cov_4_ind = max(cov_4),
+    cov_5_ind = max(cov_5),
+    cov_6_ind = max(cov_6),
     cov_1_cost = max(cov_1_cost),
-    cov_10_cost = max(cov_10_cost),
-    cov_11_cost = max(cov_11_cost),
-    cov_12_cost = max(cov_12_cost),
-    cov_26_cost = max(cov_26_cost),
-    cov_37_cost = max(cov_37_cost),
-    cov_45_cost = max(cov_45_cost)
+    cov_2_cost = max(cov_2_cost),
+    cov_3_cost = max(cov_3_cost),
+    cov_4_cost = max(cov_4_cost),
+    cov_5_cost = max(cov_5_cost),
+    cov_6_cost = max(cov_6_cost),
   ) %>% 
   ungroup()
+
+
+# Dans la base claims, garder seulement les réclamations qui touchent aux couvertures 10 ou 12
+claims_final <- 
+  claims_almost_final %>% 
+  filter(cov_2_ind + cov_4_ind >= 1) %>% 
+  select(-contains(c("_1_", "_3_", "_5_", "_6_")))
 
 
 # Base de données qui indique le nombre de réclamations pour chaque VIN =========================================================
@@ -183,7 +221,7 @@ df_nb_claims <-
   group_by(vin) %>% 
   summarise(nb_claims = n())
 
-rm(claims, claims_first, claims_second, coverages, contracts_with_claim)
+rm(claims, claims_almost_final, claims_first, claims_second, claims_third, claims_fourth, coverages, contracts_with_claim, cov_vec)
 
 
 # Fonction pour nettoyer une base de données par trajet =========================================================================
@@ -282,7 +320,7 @@ compute_tele_vars <- function(df) {
 
 # Fonction pour créer un jeu de données à partir d'un fichier TRIP_VIN*.csv =====================================================
 create_data <- function(trips_df_filename, nb_months_tele) {
-  trips_df <- read_csv(trips_df_filename)
+  trips_df <- read_csv(trips_df_filename, col_type = cols())
   
   res <- 
     trips_df %>% 
@@ -292,12 +330,17 @@ create_data <- function(trips_df_filename, nb_months_tele) {
     group_by(trip_number) %>% 
     slice(1) %>% 
     ungroup() %>% 
-    compute_tele_vars() %>% 
+    compute_tele_vars() %>%
+    mutate(
+      t_avg_daily_distance = t_avg_daily_distance * 365.25 / (30.4375 * nb_months_tele),
+      t_avg_daily_nb_trips = t_avg_daily_nb_trips * 365.25 / (30.4375 * nb_months_tele)
+    ) %>% 
     left_join(df_nb_claims, by = "vin") %>% 
     mutate(nb_claims = replace_na(nb_claims, 0)) %>% 
     mutate(claim_ind = factor(as.numeric(nb_claims > 0), levels = c("0", "1")))
   
-  i <<- i + 1; print(i)
+  i <<- i + 1
+  setTxtProgressBar(pb, i)
   return(res)
 }
 
@@ -305,28 +348,46 @@ create_data <- function(trips_df_filename, nb_months_tele) {
 # Créer les 13 jeux de données ==================================================================================================
 trip_files <- dir_ls(here("0_data"), regexp = "TRIP_VIN")
 
+pb <- txtProgressBar(min = 0, max = 3216, style = 3)
 i <- 0
-jeu_01 <- map_dfr(trip_files, create_data, nb_months_tele = 1)
-write_rds(jeu_01, path = here("2_pipeline", "01_create_data", "jeu_01.RDS")); i <- 0
-jeu_02 <- map_dfr(trip_files, create_data, nb_months_tele = 2)
-write_rds(jeu_02, path = here("2_pipeline", "01_create_data", "jeu_02.RDS")); i <- 0
-jeu_03 <- map_dfr(trip_files, create_data, nb_months_tele = 3)
-write_rds(jeu_03, path = here("2_pipeline", "01_create_data", "jeu_03.RDS")); i <- 0
-jeu_04 <- map_dfr(trip_files, create_data, nb_months_tele = 4)
-write_rds(jeu_04, path = here("2_pipeline", "01_create_data", "jeu_04.RDS")); i <- 0
-jeu_05 <- map_dfr(trip_files, create_data, nb_months_tele = 5)
-write_rds(jeu_05, path = here("2_pipeline", "01_create_data", "jeu_05.RDS")); i <- 0
-jeu_06 <- map_dfr(trip_files, create_data, nb_months_tele = 6)
-write_rds(jeu_06, path = here("2_pipeline", "01_create_data", "jeu_06.RDS")); i <- 0
-jeu_07 <- map_dfr(trip_files, create_data, nb_months_tele = 7)
-write_rds(jeu_07, path = here("2_pipeline", "01_create_data", "jeu_07.RDS")); i <- 0
-jeu_08 <- map_dfr(trip_files, create_data, nb_months_tele = 8)
-write_rds(jeu_08, path = here("2_pipeline", "01_create_data", "jeu_08.RDS")); i <- 0
-jeu_09 <- map_dfr(trip_files, create_data, nb_months_tele = 9)
-write_rds(jeu_09, path = here("2_pipeline", "01_create_data", "jeu_09.RDS")); i <- 0
-jeu_10 <- map_dfr(trip_files, create_data, nb_months_tele = 10)
-write_rds(jeu_10, path = here("2_pipeline", "01_create_data", "jeu_10.RDS")); i <- 0
-jeu_11 <- map_dfr(trip_files, create_data, nb_months_tele = 11)
-write_rds(jeu_11, path = here("2_pipeline", "01_create_data", "jeu_11.RDS")); i <- 0
-jeu_12 <- map_dfr(trip_files, create_data, nb_months_tele = 12)
-write_rds(jeu_12, path = here("2_pipeline", "01_create_data", "jeu_12.RDS")); i <- 0
+jeux_ls <- vector("list", 12)
+jeux_ls[[1]] <- map_dfr(trip_files, create_data, nb_months_tele = 1)
+jeux_ls[[2]] <- map_dfr(trip_files, create_data, nb_months_tele = 2)
+jeux_ls[[3]] <- map_dfr(trip_files, create_data, nb_months_tele = 3)
+jeux_ls[[4]] <- map_dfr(trip_files, create_data, nb_months_tele = 4)
+jeux_ls[[5]] <- map_dfr(trip_files, create_data, nb_months_tele = 5)
+jeux_ls[[6]] <- map_dfr(trip_files, create_data, nb_months_tele = 6)
+jeux_ls[[7]] <- map_dfr(trip_files, create_data, nb_months_tele = 7)
+jeux_ls[[8]] <- map_dfr(trip_files, create_data, nb_months_tele = 8)
+jeux_ls[[9]] <- map_dfr(trip_files, create_data, nb_months_tele = 9)
+jeux_ls[[10]] <- map_dfr(trip_files, create_data, nb_months_tele = 10)
+jeux_ls[[11]] <- map_dfr(trip_files, create_data, nb_months_tele = 11)
+jeux_ls[[12]] <- map_dfr(trip_files, create_data, nb_months_tele = 12)
+close(pb)
+
+# Sauvegarder les 12 jeux de données ============================================================================================
+write_rds(jeux_ls, file = here("2_pipeline", "01_create_data", "jeux_ls.RDS"))
+jeux_ls <- read_rds(here("2_pipeline", "01_create_data", "jeux_ls.RDS"))
+
+
+# Avoir exactement les mêmes VINs dans chacun des 12 jeux de données ============================================================
+vins_to_keep <- map(jeux_ls, "vin") %>% reduce(intersect)
+jeux_2_ls <- map(jeux_ls, filter, vin %in% vins_to_keep)
+
+
+# Séparer en entrainement et test ===============================================================================================
+set.seed(2020)
+vins_to_keep_shuffled <- sample(vins_to_keep)
+
+train_ls <- map(jeux_2_ls, filter, vin %in% vins_to_keep_shuffled[1:18880])
+test_ls <- map(jeux_2_ls, filter, vin %in% vins_to_keep_shuffled[18881:26971])
+
+
+# Enlever les variables inutiles pour le LASSO ==================================================================================
+train_ls %<>% map(select, -vin, -contract_start_date, -contract_end_date, -nb_claims)
+test_ls %<>% map(select, -vin, -contract_start_date, -contract_end_date, -nb_claims)
+
+
+# Sauvegarder les bases train et test ===========================================================================================
+write_rds(train_ls, file = here("2_pipeline", "01_create_data", "train_ls.RDS"))
+write_rds(test_ls, file = here("2_pipeline", "01_create_data", "test_ls.RDS"))
