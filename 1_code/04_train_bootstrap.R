@@ -7,15 +7,15 @@
 # ============================================================================================================================= #
 
 source("1_code/00_source.R")
-set.seed(2021)
 
 
 # Importer les jeux de données d'entrainement ===================================================================================
 train_ls <- read_rds(here("2_pipeline", "01_create_data", "train_ls.RDS"))
 
 
-# Créer la base de données sans télématique à partir d'une des 12 bases avec télématique ========================================
-train_classic <- train_ls[[1]] %>% select(-starts_with("t_"))
+# Créer les jeux d'entrainement =================================================================================================
+train_classic <- train_ls[[1]] %>% select(starts_with("c_"), claim_ind, -c_expo)
+train_ls %<>% map(select, starts_with("c_"), starts_with("t_"), claim_ind, -c_expo) 
 
 
 # Importer les résultats de la calibration ======================================================================================
@@ -67,37 +67,45 @@ wf_classic <- define_wf(rec_classic, penalty = best_classic)
 
 
 # Créer les 500 échantillons bootstrap pour chacune des 13 bases de données d'entrainement ======================================
-n_boot <- 500
-boot_id_df <- map_dfc(seq_len(n_boot), ~ sample.int(n = nrow(train_classic), replace = T)) 
+n_boot <- 1
+set.seed(1994)
+boot <- bootstraps(train_classic, times = n_boot, strata = claim_ind)
 
-create_bootstrap_samples <- function(data) {
-  map(seq_len(n_boot), ~ slice(data, boot_id_df[[.]]))
+boot_id_df <- 
+  map_dfc(1:n_boot, ~ boot$splits[[.]]$in_id) %>% 
+  mutate(original = seq(1, nrow(.)))
+
+
+# Fonction pour obtenir les coefficients d'une régression logistique LASSO ======================================================
+get_glmnet_coefs <- function(wf, data) {
+  coefs <- 
+    fit(wf, data = data) %>% 
+    pull_workflow_fit() %>%
+    tidy()
+  
+  i <<- i + 1
+  setTxtProgressBar(pb, i)
+  return(coefs)
 }
-
-train_bootstrap_ls <- map(train_ls, create_bootstrap_samples)
-train_bootstrap_classic <- create_bootstrap_samples(train_classic)
 
 
 # Entrainer les 13 LASSO optimaux sur chacun des 500 échantillons bootstrap =====================================================
-get_glmnet_coefs <- function(wf, data) {
-  fit(wf, data = data) %>% 
-    pull_workflow_fit() %>%
-    tidy()
-}
-
-res_boot_classic_ls <- map(train_bootstrap_classic, ~ get_glmnet_coefs(wf_classic, data = .))
-res_boot_01_ls <- map(train_bootstrap_ls[[1]], ~ get_glmnet_coefs(wf_ls[[1]], data = .))
-res_boot_02_ls <- map(train_bootstrap_ls[[2]], ~ get_glmnet_coefs(wf_ls[[2]], data = .))
-res_boot_03_ls <- map(train_bootstrap_ls[[3]], ~ get_glmnet_coefs(wf_ls[[3]], data = .))
-res_boot_04_ls <- map(train_bootstrap_ls[[4]], ~ get_glmnet_coefs(wf_ls[[4]], data = .))
-res_boot_05_ls <- map(train_bootstrap_ls[[5]], ~ get_glmnet_coefs(wf_ls[[5]], data = .))
-res_boot_06_ls <- map(train_bootstrap_ls[[6]], ~ get_glmnet_coefs(wf_ls[[6]], data = .))
-res_boot_07_ls <- map(train_bootstrap_ls[[7]], ~ get_glmnet_coefs(wf_ls[[7]], data = .))
-res_boot_08_ls <- map(train_bootstrap_ls[[8]], ~ get_glmnet_coefs(wf_ls[[8]], data = .))
-res_boot_09_ls <- map(train_bootstrap_ls[[9]], ~ get_glmnet_coefs(wf_ls[[9]], data = .))
-res_boot_10_ls <- map(train_bootstrap_ls[[10]], ~ get_glmnet_coefs(wf_ls[[10]], data = .))
-res_boot_11_ls <- map(train_bootstrap_ls[[11]], ~ get_glmnet_coefs(wf_ls[[11]], data = .))
-res_boot_12_ls <- map(train_bootstrap_ls[[12]], ~ get_glmnet_coefs(wf_ls[[12]], data = .))
+pb <- txtProgressBar(min = 0, max = (n_boot + 1) * 13, style = 3)
+i <- 0
+res_boot_classic_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_classic, data = train_classic %>% slice(.)))
+res_boot_01_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[1]], data = train_ls[[1]] %>% slice(.)))
+res_boot_02_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[2]], data = train_ls[[2]] %>% slice(.)))
+res_boot_03_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[3]], data = train_ls[[3]] %>% slice(.)))
+res_boot_04_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[4]], data = train_ls[[4]] %>% slice(.)))
+res_boot_05_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[5]], data = train_ls[[5]] %>% slice(.)))
+res_boot_06_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[6]], data = train_ls[[6]] %>% slice(.)))
+res_boot_07_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[7]], data = train_ls[[7]] %>% slice(.)))
+res_boot_08_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[8]], data = train_ls[[8]] %>% slice(.)))
+res_boot_09_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[9]], data = train_ls[[9]] %>% slice(.)))
+res_boot_10_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[10]], data = train_ls[[10]] %>% slice(.)))
+res_boot_11_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[11]], data = train_ls[[11]] %>% slice(.)))
+res_boot_12_ls <- map(boot_id_df, ~ get_glmnet_coefs(wf_ls[[12]], data = train_ls[[12]] %>% slice(.)))
+close(pb)
 
 
 # Sauvegarder les paramètres pour les 500 échantillons bootstrap et pour chacun des 13 modèles ==================================

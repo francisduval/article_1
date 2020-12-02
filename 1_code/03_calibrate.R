@@ -13,8 +13,9 @@ source("1_code/00_source.R")
 train_ls <- read_rds(here("2_pipeline", "01_create_data", "train_ls.RDS"))
 
 
-# Créer un jeu d'entrainement avec seulement les variables classiques ===========================================================
-train_classic <- train_ls[[1]] %>% select(-starts_with("t_"))
+# Créer les jeux d'entrainement =================================================================================================
+train_classic <- train_ls[[1]] %>% select(starts_with("c_"), claim_ind, -c_expo)
+train_ls %<>% map(select, starts_with("c_"), starts_with("t_"), claim_ind, -c_expo) 
 
 
 # Créer les folds pour la validation croisée ====================================================================================

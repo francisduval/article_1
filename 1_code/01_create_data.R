@@ -78,10 +78,10 @@ contracts <-
     fourth_claim_cost_4    = as.numeric(FourthClaim_loss4)
   ) %>% 
   arrange(vin, contract_start_date) %>% 
-  filter_at(vars(starts_with("expo_")), all_vars(near(., expo_2, tol = 0.05))) %>%
+  filter_at(vars(starts_with("expo_")), all_vars(near(., expo_2, tol = 0.01))) %>%
   rename(expo = expo_2) %>% 
   select(-starts_with("expo_")) %>% 
-  filter(expo > 0.95 & expo < 1.05) %>% 
+  filter(expo > 0.995 & expo < 1.005) %>% 
   group_by(vin) %>% 
   slice(1) %>% 
   ungroup()
@@ -92,7 +92,6 @@ contracts <-
 contracts_with_claim <- 
   contracts %>% 
   filter(!is.na(first_claim_id))
-
 
 # Transformer la base de données par contrats de manière à avoir une ligne par réclamation
 claims_first <- 
@@ -151,7 +150,7 @@ claims_fourth <-
 # ----------
 
 claims <- bind_rows(claims_first, claims_second, claims_third, claims_fourth)
-
+write_rds(claims, here("2_pipeline", "01_create_data", "claims.RDS"))
 
 # Créer une base de données ayant une ligne par couverture
 cov_vec <- 
@@ -173,14 +172,12 @@ coverages <-
     cost = as.numeric(cost)
   )
 
-
 # Créer des variables indicatrices et les coûts par couverture
 coverages %<>%
   dummy_cols("cov") %>% 
   select(-cov) %>% 
   mutate_at(vars(contains("cov")), list(cost = ~. * coverages$cost)) %>% 
   select(-cost)
-
 
 # Retour à une ligne par réclamation
 claims_almost_final <- 
@@ -207,8 +204,7 @@ claims_almost_final <-
   ) %>% 
   ungroup()
 
-
-# Dans la base claims, garder seulement les réclamations qui touchent aux couvertures 10 ou 12
+# Dans la base claims, garder seulement les réclamations qui touchent aux couvertures 2 ou 4
 claims_final <- 
   claims_almost_final %>% 
   filter(cov_2_ind + cov_4_ind >= 1) %>% 
@@ -373,19 +369,20 @@ jeux_ls <- read_rds(here("2_pipeline", "01_create_data", "jeux_ls.RDS"))
 # Avoir exactement les mêmes VINs dans chacun des 12 jeux de données ============================================================
 vins_to_keep <- map(jeux_ls, "vin") %>% reduce(intersect)
 jeux_2_ls <- map(jeux_ls, filter, vin %in% vins_to_keep)
+write_rds(jeux_2_ls, file = here("2_pipeline", "01_create_data", "jeux_2_ls.RDS"))
 
 
 # Séparer en entrainement et test ===============================================================================================
 set.seed(2020)
 vins_to_keep_shuffled <- sample(vins_to_keep)
 
-train_ls <- map(jeux_2_ls, filter, vin %in% vins_to_keep_shuffled[1:18880])
-test_ls <- map(jeux_2_ls, filter, vin %in% vins_to_keep_shuffled[18881:26971])
+train_ls <- map(jeux_2_ls, filter, vin %in% vins_to_keep_shuffled[1:18390])
+test_ls <- map(jeux_2_ls, filter, vin %in% vins_to_keep_shuffled[18391:26271])
 
 
 # Enlever les variables inutiles pour le LASSO ==================================================================================
-train_ls %<>% map(select, -vin, -contract_start_date, -contract_end_date, -nb_claims)
-test_ls %<>% map(select, -vin, -contract_start_date, -contract_end_date, -nb_claims)
+train_ls %<>% map(select, -vin, -contract_start_date, -contract_end_date)
+test_ls %<>% map(select, -vin, -contract_start_date, -contract_end_date)
 
 
 # Sauvegarder les bases train et test ===========================================================================================
