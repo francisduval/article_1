@@ -67,7 +67,7 @@ wf_classic <- define_wf(rec_classic, penalty = best_classic)
 
 
 # Créer les 500 échantillons bootstrap pour chacune des 13 bases de données d'entrainement ======================================
-n_boot <- 1
+n_boot <- 500
 set.seed(1994)
 boot <- bootstraps(train_classic, times = n_boot, strata = claim_ind)
 
